@@ -1225,8 +1225,113 @@ function renderHistory() {
   }).join('');
 }
 
+
+function applyMostCommonAthletePreset() {
+  const preset = {
+    athleteName: 'Hybrid Athlete',
+    age: 34,
+    sex: 'male',
+    bodyweight: 185,
+    squat: 275,
+    bench: 205,
+    deadlift: 335,
+    ohp: 135,
+    vo2max: 46,
+    rhr: 58,
+    pushups: 40,
+    lsit: 20,
+    r400: 74,
+    r1600_min: 6,
+    r1600_sec: 15,
+    r5k_min: 24,
+    r5k_sec: 30,
+    pullups: 10,
+    bwBenchReps: 12,
+    deadHang: 60,
+    row500_min: 1,
+    row500_sec: 45,
+    row5k_min: 21,
+    row5k_sec: 0,
+    vertJump: 22,
+    broadJump: 86
+  };
+
+  Object.entries(preset).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = String(value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  document.querySelectorAll('.time-sec').forEach(inp => {
+    if (inp.value !== '') {
+      const n = Math.max(0, Math.min(59, Math.trunc(Number(inp.value) || 0)));
+      inp.value = String(n).padStart(2, '0');
+    }
+  });
+
+  const btn = document.querySelector('.preset-btn');
+  if (btn) {
+    const old = btn.textContent;
+    btn.textContent = '✓ Defaults Applied';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = old;
+      btn.disabled = false;
+    }, 1100);
+  }
+}
+
+function setupTimeFieldAutoAdvance() {
+  document.querySelectorAll('.time-input-group').forEach(group => {
+    const minInput = group.querySelector('.time-min');
+    const secInput = group.querySelector('.time-sec');
+    if (!minInput || !secInput) return;
+
+    const clampSec = () => {
+      if (secInput.value === '') return;
+      let n = Math.trunc(Number(secInput.value));
+      if (!Number.isFinite(n)) return;
+      n = Math.max(0, Math.min(59, n));
+      secInput.value = String(n).padStart(2, '0');
+    };
+
+    minInput.addEventListener('input', () => {
+      const digits = String(minInput.value ?? '').replace(/\D/g, '');
+      if (digits.length >= 2 && document.activeElement === minInput) {
+        secInput.focus();
+        if (typeof secInput.select === 'function') secInput.select();
+      }
+    });
+
+    minInput.addEventListener('keydown', (e) => {
+      if (e.key === ':' || e.key === '.' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        secInput.focus();
+        if (typeof secInput.select === 'function') secInput.select();
+      }
+    });
+
+    secInput.addEventListener('input', () => {
+      let digits = String(secInput.value ?? '').replace(/\D/g, '');
+      if (digits.length > 2) digits = digits.slice(-2);
+      if (secInput.value !== digits) secInput.value = digits;
+      if (digits.length >= 2) clampSec();
+    });
+
+    secInput.addEventListener('blur', clampSec);
+
+    secInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && secInput.value === '') {
+        minInput.focus();
+      }
+    });
+  });
+}
+
 // Load history on page load
-document.addEventListener('DOMContentLoaded', renderHistory);
+document.addEventListener('DOMContentLoaded', () => { renderHistory(); setupTimeFieldAutoAdvance(); });
 
 
 /* ═══════════════════════════════════════════════════
