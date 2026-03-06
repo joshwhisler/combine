@@ -689,7 +689,9 @@ function strengthScore(key, label, liftedLbs) {
 const CALLOUTS = {
   elite:  ['BEAST MODE', 'HE\'S ON FIRE!', 'FREAK ATHLETE', 'ABSOLUTE UNIT', 'UNSTOPPABLE'],
   great:  ['BALLER STATUS', 'BUILT DIFFERENT', 'NO DAYS OFF', 'CERTIFIED'],
-  low:    ['KEEP GRINDING', 'WORK IN PROGRESS', 'ROOM TO GROW'],
+  solid:  ['ON THE RISE', 'GETTING AFTER IT', 'SOLID FOUNDATION', 'CONTENDER'],
+  mid:    ['LOCKED IN', 'GRINDING', 'STAY HUNGRY', 'BUILDING'],
+  low:    ['KEEP GRINDING', 'WORK IN PROGRESS', 'ROOM TO GROW', 'DAY ONE'],
 };
 
 function showArcadeCallout(overall) {
@@ -701,11 +703,15 @@ function showArcadeCallout(overall) {
   } else if (overall >= 80) {
     text = CALLOUTS.great[Math.floor(Math.random() * CALLOUTS.great.length)];
     color = '#22c55e';
-  } else if (overall < 55) {
+  } else if (overall >= 70) {
+    text = CALLOUTS.solid[Math.floor(Math.random() * CALLOUTS.solid.length)];
+    color = '#3b82f6';
+  } else if (overall >= 55) {
+    text = CALLOUTS.mid[Math.floor(Math.random() * CALLOUTS.mid.length)];
+    color = '#a0a0b0';
+  } else {
     text = CALLOUTS.low[Math.floor(Math.random() * CALLOUTS.low.length)];
     color = '#ef4444';
-  } else {
-    return; // 55-79 range — no callout
   }
 
   el.textContent = text;
@@ -899,8 +905,14 @@ function renderWeakestLink(catScores) {
    ═══════════════════════════════════════════════════ */
 
 function renderResults(name, age, sex, bw, overall, catScores, results) {
+  // Show reaction moment first, then reveal results
+  showReactionMoment(overall, () => {
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Arcade callout fires after reaction moment
+    showArcadeCallout(overall);
+  });
+
   document.getElementById('results').classList.add('visible');
-  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // Overall
   animateNumber('overallNum', overall);
@@ -985,11 +997,13 @@ function renderResults(name, age, sex, bw, overall, catScores, results) {
     });
   }, 200);
 
+  // Percentile highlight (best category)
+  renderPercentileHighlight(catScores, results);
+
   // Radar chart
   drawRadar(catScores);
 
-  // Arcade systems
-  showArcadeCallout(overall);
+  // Arcade animations (callout already fires from reaction moment callback)
   applyArcadeAnimations(catScores, results, overall);
 }
 
@@ -1023,8 +1037,23 @@ function animateNumber(id, target) {
 
 function drawRadar(catScores, compareCatScores) {
   const canvas = document.getElementById('radarCanvas');
+  if (!canvas) return;
+
+  const wrapper = canvas.parentElement;
+  const maxSize = 420;
+  const displaySize = Math.max(240, Math.min(maxSize, Math.floor((wrapper?.clientWidth || maxSize) - 20)));
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.style.width = `${displaySize}px`;
+  canvas.style.height = `${displaySize}px`;
+  canvas.width = Math.floor(displaySize * dpr);
+  canvas.height = Math.floor(displaySize * dpr);
+
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = displaySize;
+  const H = displaySize;
   ctx.clearRect(0, 0, W, H);
 
   const labels = Object.keys(catScores).filter(k => catScores[k] !== null);
@@ -1032,10 +1061,13 @@ function drawRadar(catScores, compareCatScores) {
 
   if (labels.length < 2) return;
 
-  const cx = W/2, cy = H/2;
-  const R = Math.min(W, H)/2 - 60;
+  const cx = W / 2;
+  const cy = H / 2;
+  const labelOffset = Math.max(20, Math.floor(W * 0.06));
+  const scoreOffset = Math.max(34, Math.floor(W * 0.09));
+  const R = (Math.min(W, H) / 2) - scoreOffset - 8;
   const N = labels.length;
-  const angle = (i) => (Math.PI * 2 * i / N) - Math.PI/2;
+  const angle = (i) => (Math.PI * 2 * i / N) - Math.PI / 2;
 
   // Grid
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
@@ -1060,7 +1092,7 @@ function drawRadar(catScores, compareCatScores) {
     ctx.stroke();
   }
 
-  // Compare overlay (previous result — drawn first, underneath)
+  // Compare overlay (previous result, drawn first)
   if (compareCatScores) {
     const cVals = labels.map(k => (compareCatScores[k] || 0) / 100);
     ctx.beginPath();
@@ -1081,14 +1113,15 @@ function drawRadar(catScores, compareCatScores) {
   }
 
   // Labels (muted)
+  const fontSize = Math.max(11, Math.floor(W * 0.032));
   ctx.fillStyle = '#5a5a6e';
-  ctx.font = "400 14px 'Inter', sans-serif";
+  ctx.font = `400 ${fontSize}px "Inter", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < N; i++) {
-    const lx = cx + (R + 26) * Math.cos(angle(i));
-    const ly = cy + (R + 26) * Math.sin(angle(i));
-    const t = labels[i].toUpperCase().replace(/_/g,' ');
+    const lx = cx + (R + labelOffset) * Math.cos(angle(i));
+    const ly = cy + (R + labelOffset) * Math.sin(angle(i));
+    const t = labels[i].toUpperCase().replace(/_/g, ' ');
     ctx.fillText(t, lx, ly);
   }
 
@@ -1112,27 +1145,27 @@ function drawRadar(catScores, compareCatScores) {
   ctx.stroke();
 
   // Dots
+  const dotSize = Math.max(3, Math.floor(W * 0.012));
   for (let i = 0; i < N; i++) {
     const r = R * values[i];
     const x = cx + r * Math.cos(angle(i));
     const y = cy + r * Math.sin(angle(i));
     ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI*2);
+    ctx.arc(x, y, dotSize, 0, Math.PI * 2);
     ctx.fillStyle = '#c8ff00';
     ctx.fill();
   }
 
   // Score labels
-  ctx.fillStyle = '#a0a0b0';
-  ctx.font = '400 14px "Inter", sans-serif';
+  ctx.font = `400 ${fontSize}px "Inter", sans-serif`;
   ctx.textAlign = 'center';
   for (let i = 0; i < N; i++) {
-    const x = cx + (R + 40) * Math.cos(angle(i));
-    const y = cy + (R + 40) * Math.sin(angle(i));
+    const x = cx + (R + scoreOffset) * Math.cos(angle(i));
+    const y = cy + (R + scoreOffset) * Math.sin(angle(i));
     const score = catScores[labels[i]];
     ctx.fillStyle = score >= 90 ? '#c8ff00' : score >= 80 ? '#22c55e' : score >= 70 ? '#3b82f6' : '#a0a0b0';
-    ctx.fillText(labels[i], x, y - 4);
-    ctx.fillText(score, x, y + 14);
+    ctx.fillText(labels[i], x, y - Math.max(4, Math.floor(fontSize * 0.35)));
+    ctx.fillText(score, x, y + Math.max(12, Math.floor(fontSize * 0.95)));
   }
 
   // Show/hide compare legend
@@ -1330,8 +1363,246 @@ function setupTimeFieldAutoAdvance() {
   });
 }
 
+/* ═══════════════════════════════════════════════════
+   QUICK START MODE
+   ═══════════════════════════════════════════════════ */
+
+// Quick start key metrics: one per category
+const QUICK_METRICS = ['squat', 'vo2max', 'r1600_min', 'pullups', 'vertJump'];
+const QUICK_METRIC_IDS = ['squat', 'vo2max', 'r1600_min', 'r1600_sec', 'pullups', 'vertJump'];
+
+let _inputMode = 'quick'; // 'quick' or 'full'
+
+function setInputMode(mode) {
+  _inputMode = mode;
+  const grid = document.querySelector('.metrics-grid');
+  const quickBtn = document.getElementById('quickStartBtn');
+  const fullBtn = document.getElementById('fullModeBtn');
+  const hint = document.getElementById('modeHint');
+
+  if (mode === 'quick') {
+    grid.classList.add('quick-mode');
+    quickBtn.classList.add('active');
+    fullBtn.classList.remove('active');
+    hint.textContent = '5 key metrics — one per category. Get your rating in 60 seconds.';
+  } else {
+    grid.classList.remove('quick-mode');
+    fullBtn.classList.add('active');
+    quickBtn.classList.remove('active');
+    hint.textContent = 'All 23 metrics for a complete athletic profile.';
+  }
+}
+
+function initQuickStartMode() {
+  // Tag quick-start metrics and their parent category blocks
+  const metricsGrid = document.querySelector('.metrics-grid');
+  const blocks = metricsGrid.querySelectorAll('.category-block');
+
+  // Map metric IDs to their parent blocks
+  QUICK_METRIC_IDS.forEach(id => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const row = input.closest('.metric-row');
+    if (row) {
+      row.classList.add('quick-metric');
+      // Add quick badge to metric name
+      const metricName = row.querySelector('.metric-name');
+      if (metricName && !metricName.querySelector('.quick-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'quick-badge';
+        badge.textContent = 'KEY';
+        metricName.appendChild(badge);
+      }
+    }
+    const block = input.closest('.category-block');
+    if (block) block.classList.add('quick-visible');
+  });
+
+  // Start in quick mode by default
+  setInputMode('quick');
+}
+
+/* ═══════════════════════════════════════════════════
+   PERCENTILE HIGHLIGHT (Best Category)
+   ═══════════════════════════════════════════════════ */
+
+function renderPercentileHighlight(catScores, results) {
+  const panel = document.getElementById('percentileHighlight');
+  const filled = Object.entries(catScores).filter(([k, v]) => v !== null);
+
+  if (filled.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  // Find best category
+  let best = filled[0];
+  for (const entry of filled) {
+    if (entry[1] > best[1]) best = entry;
+  }
+
+  const bestCat = best[0];
+  const bestScore = best[1];
+  const bestPct = ratingToPct(bestScore);
+  const topPct = Math.max(1, Math.round(100 - bestPct));
+
+  // Category icons
+  const catIcons = {
+    'STRENGTH': '🏋️',
+    'CONDITIONING': '🫀',
+    'SPEED / ENDURANCE': '🏃',
+    'STRENGTH ENDURANCE': '💪',
+    'EXPLOSIVENESS': '🚀'
+  };
+
+  const icon = catIcons[bestCat] || '⭐';
+
+  panel.innerHTML = `
+    <div class="pct-best-label">YOUR STRONGEST DOMAIN</div>
+    <div class="pct-best-category">${icon} ${bestCat}</div>
+    <div class="pct-best-stat">
+      You scored <strong>${bestScore}</strong> — better than <strong>${Math.round(bestPct)}%</strong> of athletes your age.
+      ${topPct <= 5 ? '<br>🔥 You\'re in the top ' + topPct + '% — that\'s rare.' : ''}
+      ${topPct <= 15 && topPct > 5 ? '<br>Only ' + topPct + '% of athletes score higher in this category.' : ''}
+    </div>
+    <div class="pct-rank-bar">
+      <div class="pct-rank-track">
+        <div class="pct-rank-fill" id="pctRankFill" data-width="${bestPct}%"></div>
+      </div>
+      <div class="pct-rank-labels">
+        <span>0%</span>
+        <span>YOU: P${Math.round(bestPct)}</span>
+        <span>100%</span>
+      </div>
+    </div>
+  `;
+
+  panel.style.display = 'block';
+
+  // Animate fill bar
+  setTimeout(() => {
+    const fill = document.getElementById('pctRankFill');
+    if (fill) fill.style.width = fill.dataset.width;
+  }, 300);
+}
+
+/* ═══════════════════════════════════════════════════
+   REACTION MOMENT (Full-screen score reveal)
+   ═══════════════════════════════════════════════════ */
+
+function showReactionMoment(overall, callback) {
+  const overlay = document.getElementById('reactionOverlay');
+  const scoreEl = document.getElementById('reactionScore');
+  const tierEl = document.getElementById('reactionTier');
+  const particlesEl = document.getElementById('reactionParticles');
+
+  // Determine colors based on score
+  let color, tierColor;
+  if (overall >= 90) { color = '#c8ff00'; tierColor = '#c8ff00'; }
+  else if (overall >= 80) { color = '#22c55e'; tierColor = '#22c55e'; }
+  else if (overall >= 70) { color = '#3b82f6'; tierColor = '#3b82f6'; }
+  else if (overall >= 55) { color = '#a0a0b0'; tierColor = '#a0a0b0'; }
+  else { color = '#ef4444'; tierColor = '#ef4444'; }
+
+  scoreEl.style.color = color;
+  scoreEl.style.textShadow = `0 0 60px ${color}66, 0 0 120px ${color}26`;
+  tierEl.style.color = tierColor;
+
+  // Clear previous
+  particlesEl.innerHTML = '';
+  scoreEl.classList.remove('counting');
+  tierEl.classList.remove('visible');
+
+  // Show overlay
+  overlay.classList.add('active');
+
+  // Count up animation
+  let current = 0;
+  const duration = 1200;
+  const startTime = performance.now();
+
+  scoreEl.classList.add('counting');
+
+  function countUp(timestamp) {
+    const elapsed = timestamp - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    current = Math.round(eased * overall);
+    scoreEl.textContent = current;
+
+    if (progress < 1) {
+      requestAnimationFrame(countUp);
+    } else {
+      scoreEl.textContent = overall;
+
+      // Show tier
+      tierEl.textContent = tierName(overall);
+      tierEl.classList.add('visible');
+
+      // Burst particles
+      spawnParticles(particlesEl, color, overall >= 80 ? 40 : 20);
+
+      // Add ring burst
+      const ring = document.createElement('div');
+      ring.className = 'reaction-ring';
+      particlesEl.appendChild(ring);
+      requestAnimationFrame(() => ring.classList.add('burst'));
+
+      // Screen shake for elite
+      if (overall >= 90) {
+        document.body.classList.add('screen-shake');
+        setTimeout(() => document.body.classList.remove('screen-shake'), 450);
+      }
+
+      // Dismiss after delay
+      setTimeout(() => {
+        overlay.classList.remove('active');
+        scoreEl.classList.remove('counting');
+        tierEl.classList.remove('visible');
+        particlesEl.innerHTML = '';
+        if (callback) callback();
+      }, overall >= 90 ? 2200 : 1600);
+    }
+  }
+
+  requestAnimationFrame(countUp);
+}
+
+function spawnParticles(container, color, count) {
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'reaction-particle';
+    const size = 4 + Math.random() * 8;
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const dist = 150 + Math.random() * 250;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist;
+
+    p.style.cssText = `
+      width: ${size}px; height: ${size}px;
+      background: ${color};
+      top: 50%; left: 50%;
+      --tx: ${tx}px; --ty: ${ty}px;
+      animation-delay: ${Math.random() * 0.3}s;
+      box-shadow: 0 0 ${size}px ${color}88;
+    `;
+    container.appendChild(p);
+  }
+}
+
 // Load history on page load
-document.addEventListener('DOMContentLoaded', () => { renderHistory(); setupTimeFieldAutoAdvance(); });
+document.addEventListener('DOMContentLoaded', () => {
+  renderHistory();
+  setupTimeFieldAutoAdvance();
+  initQuickStartMode();
+});
+
+window.addEventListener('resize', () => {
+  if (!_lastResult) return;
+  const history = JSON.parse(localStorage.getItem('combine_history') || '[]');
+  const compareCat = _compareEntry !== null && history[_compareEntry] ? history[_compareEntry].catScores : null;
+  drawRadar(_lastResult.catScores, compareCat);
+});
 
 
 /* ═══════════════════════════════════════════════════
@@ -1339,162 +1610,442 @@ document.addEventListener('DOMContentLoaded', () => { renderHistory(); setupTime
    Draws to a hidden canvas, then triggers download
    ═══════════════════════════════════════════════════ */
 
-function generateShareCard() {
-  if (!_lastResult) { alert('Generate ratings first.'); return; }
-  const r = _lastResult;
+/* ═══════════════════════════════════════════════════
+   MULTI-SLIDE SHARE CARDS
+   ═══════════════════════════════════════════════════ */
+
+let _currentSlide = 0;
+let _slideCanvases = [];
+
+function shareCardBg(ctx, W, H, accentColor) {
+  ctx.fillStyle = '#08080c';
+  ctx.fillRect(0, 0, W, H);
+  const g1 = ctx.createRadialGradient(W*0.2, H*0.15, 0, W*0.2, H*0.15, W*0.6);
+  g1.addColorStop(0, accentColor + '14');
+  g1.addColorStop(1, 'rgba(10,10,11,0)');
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function shareCardBranding(ctx, W, H) {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c8ff00';
+  ctx.font = '400 22px "Space Grotesk", sans-serif';
+  ctx.fillText('COMBINE', W/2, H - 55);
+  ctx.fillStyle = '#5a5a6e';
+  ctx.font = '400 12px "JetBrains Mono", monospace';
+  ctx.fillText('ATHLETIC PERFORMANCE RATING SYSTEM', W/2, H - 30);
+}
+
+function scoreColor(score) {
+  if (score >= 90) return '#c8ff00';
+  if (score >= 80) return '#22c55e';
+  if (score >= 70) return '#3b82f6';
+  if (score >= 55) return '#a0a0b0';
+  return '#ef4444';
+}
+
+// SLIDE 1: The Big Reveal — Overall score front and center
+function drawSlide1(r) {
   const canvas = document.getElementById('shareCanvas');
   const ctx = canvas.getContext('2d');
   const W = 1080, H = 1080;
   canvas.width = W; canvas.height = H;
 
-  // Background
-  ctx.fillStyle = '#08080c';
-  ctx.fillRect(0, 0, W, H);
+  const color = scoreColor(r.overall);
+  shareCardBg(ctx, W, H, color);
 
-  // Subtle radial gradient accents
-  const g1 = ctx.createRadialGradient(100, 80, 0, 100, 80, 600);
-  g1.addColorStop(0, 'rgba(200,255,0,0.08)');
-  g1.addColorStop(1, 'rgba(10,10,11,0)');
-  ctx.fillStyle = g1;
-  ctx.fillRect(0, 0, W, H);
-
-  const g2 = ctx.createRadialGradient(W-100, 120, 0, W-100, 120, 500);
-  g2.addColorStop(0, 'rgba(59,130,246,0.05)');
-  g2.addColorStop(1, 'rgba(10,10,11,0)');
-  ctx.fillStyle = g2;
-  ctx.fillRect(0, 0, W, H);
-
-  // Overall badge area (left strip)
-  let badgeColor;
-  if (r.overall >= 90) badgeColor = '#c8ff00';
-  else if (r.overall >= 80) badgeColor = '#22c55e';
-  else if (r.overall >= 70) badgeColor = '#3b82f6';
-  else if (r.overall >= 55) badgeColor = '#6b7280';
-  else badgeColor = '#ef4444';
-
-  ctx.fillStyle = badgeColor;
-  ctx.fillRect(0, 0, 260, H);
-
-  // Badge arrow
-  ctx.beginPath();
-  ctx.moveTo(260, 0); ctx.lineTo(310, H/2); ctx.lineTo(260, H);
-  ctx.closePath(); ctx.fill();
-
-  // OVR number
-  ctx.fillStyle = '#08080c';
-  ctx.font = '400 120px "Space Grotesk", sans-serif';
+  // Large centered score
   ctx.textAlign = 'center';
-  ctx.fillText(r.overall, 130, 260);
+  ctx.fillStyle = color;
+  ctx.font = '700 220px "Space Grotesk", sans-serif';
+  ctx.fillText(r.overall, W/2, H*0.44);
 
   // OVR label
-  ctx.font = '400 20px "Space Grotesk", sans-serif';
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillText('OVR', 130, 300);
+  ctx.font = '500 24px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color + '88';
+  ctx.fillText('OVR', W/2, H*0.44 + 40);
 
-  // Tier
-  ctx.font = '400 24px "Space Grotesk", sans-serif';
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
-  ctx.fillText(r.tier, 130, 355);
+  // Tier with glow
+  ctx.font = '700 48px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 30;
+  ctx.fillText(r.tier, W/2, H*0.58);
+  ctx.shadowBlur = 0;
 
   // Name
-  ctx.textAlign = 'left';
+  ctx.font = '600 36px "Space Grotesk", sans-serif';
   ctx.fillStyle = '#f0f0f5';
-  ctx.font = '400 40px "Space Grotesk", sans-serif';
-  const displayName = (r.name || 'ATHLETE').toUpperCase();
-  ctx.fillText(displayName, 340, 180);
+  ctx.fillText((r.name || 'ATHLETE').toUpperCase(), W/2, H*0.68);
 
   // Meta
-  ctx.fillStyle = '#5a5a6e';
   ctx.font = '400 18px "Inter", sans-serif';
-  ctx.fillText(`${r.age} YRS · ${r.sex.toUpperCase()} · ${r.bw ? r.bw + ' LBS' : ''}`, 340, 220);
+  ctx.fillStyle = '#5a5a6e';
+  ctx.fillText(`${r.age} YRS · ${r.sex.toUpperCase()} · ${r.bw ? r.bw + ' LBS' : ''}`, W/2, H*0.72);
+
+  // Percentile
+  const pctVals = r.results.map(x => x.percentile).filter(p => typeof p === 'number');
+  if (pctVals.length) {
+    const avgPct = Math.round(pctVals.reduce((a,b)=>a+b,0) / pctVals.length);
+    ctx.font = '500 20px "Inter", sans-serif';
+    ctx.fillStyle = '#a0a0b0';
+    ctx.fillText(`Top ${100-avgPct}% of athletes`, W/2, H*0.77);
+  }
+
+  shareCardBranding(ctx, W, H);
+  return canvas;
+}
+
+// SLIDE 2: Best Category Highlight
+function drawSlide2(r) {
+  const canvas = document.getElementById('shareCanvas2');
+  const ctx = canvas.getContext('2d');
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+
+  const filled = Object.entries(r.catScores).filter(([k,v]) => v !== null);
+  let best = filled[0] || ['—', 0];
+  for (const entry of filled) { if (entry[1] > best[1]) best = entry; }
+  const color = scoreColor(best[1]);
+
+  shareCardBg(ctx, W, H, color);
+
+  // Header
+  ctx.textAlign = 'center';
+  ctx.font = '600 16px "Inter", sans-serif';
+  ctx.fillStyle = '#5a5a6e';
+  ctx.letterSpacing = '0.15em';
+  ctx.fillText('STRONGEST DOMAIN', W/2, 120);
+
+  // Category name
+  ctx.font = '700 56px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 40;
+  ctx.fillText(best[0], W/2, 220);
+  ctx.shadowBlur = 0;
+
+  // Score
+  ctx.font = '700 180px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color;
+  ctx.fillText(best[1], W/2, 440);
+
+  // Percentile context
+  const bestPct = ratingToPct(best[1]);
+  const topPct = Math.max(1, Math.round(100 - bestPct));
+  ctx.font = '500 28px "Inter", sans-serif';
+  ctx.fillStyle = '#a0a0b0';
+  ctx.fillText(`Better than ${Math.round(bestPct)}% of athletes your age`, W/2, 510);
+
+  if (topPct <= 10) {
+    ctx.font = '700 22px "Inter", sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(`TOP ${topPct}%`, W/2, 560);
+  }
+
+  // Progress bar
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  roundRect(ctx, 200, 600, 680, 16, 8);
+  ctx.fill();
+  ctx.fillStyle = color;
+  roundRect(ctx, 200, 600, 680 * (bestPct / 100), 16, 8);
+  ctx.fill();
+
+  // Other categories smaller
+  let y = 700;
+  const others = filled.filter(([k]) => k !== best[0]);
+  others.forEach(([cat, sc]) => {
+    const c = scoreColor(sc);
+    ctx.textAlign = 'left';
+    ctx.font = '400 18px "Inter", sans-serif';
+    ctx.fillStyle = '#5a5a6e';
+    ctx.fillText(cat, 200, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = c;
+    ctx.font = '600 24px "Space Grotesk", sans-serif';
+    ctx.fillText(sc, 880, y);
+    y += 50;
+  });
+
+  // Name
+  ctx.textAlign = 'center';
+  ctx.font = '400 18px "Inter", sans-serif';
+  ctx.fillStyle = '#5a5a6e';
+  ctx.fillText((r.name || 'ATHLETE').toUpperCase(), W/2, H - 100);
+
+  shareCardBranding(ctx, W, H);
+  return canvas;
+}
+
+// SLIDE 3: Full Category Breakdown with bars
+function drawSlide3(r) {
+  const canvas = document.getElementById('shareCanvas3');
+  const ctx = canvas.getContext('2d');
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+
+  shareCardBg(ctx, W, H, '#c8ff00');
+
+  // Header
+  ctx.textAlign = 'center';
+  ctx.font = '600 16px "Inter", sans-serif';
+  ctx.fillStyle = '#5a5a6e';
+  ctx.fillText('FULL BREAKDOWN', W/2, 100);
+
+  ctx.font = '600 36px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#f0f0f5';
+  ctx.fillText((r.name || 'ATHLETE').toUpperCase(), W/2, 150);
 
   // Category bars
   const cats = Object.entries(r.catScores).filter(([k,v]) => v !== null);
-  const barStartY = 290;
-  const barH = 44;
-  const barGap = 16;
-  const barMaxW = 620;
+  const barStartY = 220;
+  const barH = 80;
+  const barGap = 28;
+  const barMaxW = 600;
+  const xStart = 240;
 
-  cats.forEach(([cat, score], i) => {
+  const catIcons = { 'STRENGTH':'🏋️', 'CONDITIONING':'🫀', 'SPEED / ENDURANCE':'🏃', 'STRENGTH ENDURANCE':'💪', 'EXPLOSIVENESS':'🚀' };
+
+  cats.forEach(([cat, sc], i) => {
     const y = barStartY + i * (barH + barGap);
+    const c = scoreColor(sc);
 
-    // Label
-    ctx.fillStyle = '#5a5a6e';
-    ctx.font = '400 14px "Inter", sans-serif';
+    // Icon + label
     ctx.textAlign = 'left';
-    ctx.fillText(cat, 340, y + 12);
+    ctx.font = '400 16px "Inter", sans-serif';
+    ctx.fillStyle = '#5a5a6e';
+    ctx.fillText((catIcons[cat] || '') + ' ' + cat, xStart, y + 20);
 
     // Score
     ctx.textAlign = 'right';
-    const sc = score >= 90 ? '#c8ff00' : score >= 80 ? '#22c55e' : score >= 70 ? '#3b82f6' : score >= 55 ? '#a0a0b0' : '#ef4444';
-    ctx.fillStyle = sc;
-    ctx.font = '400 24px "Space Grotesk", sans-serif';
-    ctx.fillText(score, 340 + barMaxW, y + 14);
+    ctx.fillStyle = c;
+    ctx.font = '700 40px "Space Grotesk", sans-serif';
+    ctx.fillText(sc, xStart + barMaxW, y + 22);
 
     // Bar track
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillRect(340, y + 24, barMaxW, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    roundRect(ctx, xStart, y + 40, barMaxW, 12, 6);
+    ctx.fill();
 
     // Bar fill
-    ctx.fillStyle = sc;
-    ctx.fillRect(340, y + 24, barMaxW * (score / 100), 8);
-  });
+    ctx.fillStyle = c;
+    roundRect(ctx, xStart, y + 40, barMaxW * (sc / 100), 12, 6);
+    ctx.fill();
 
-  // Individual metric breakdown (compact)
-  const metricsStartY = barStartY + cats.length * (barH + barGap) + 30;
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(340, metricsStartY, barMaxW, 1);
-
-  const metrics = r.results.slice(0, 12); // max 12 metrics
-  const colW = barMaxW / 2;
-  const rowH = 36;
-
-  ctx.font = '400 18px "Inter", sans-serif';
-  metrics.forEach((m, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    const x = 340 + col * colW;
-    const y = metricsStartY + 24 + row * rowH;
-
+    // Tier label
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#5a5a6e';
-    ctx.fillText(m.label, x, y);
-
-    ctx.textAlign = 'right';
-    const mc = m.rating >= 90 ? '#c8ff00' : m.rating >= 80 ? '#22c55e' : m.rating >= 70 ? '#3b82f6' : '#a0a0b0';
-    ctx.fillStyle = mc;
-    ctx.font = '400 14px "Inter", sans-serif';
-    ctx.fillText(m.rating, x + colW - 10, y);
-    ctx.font = '400 18px "Inter", sans-serif';
+    ctx.font = '600 12px "Inter", sans-serif';
+    ctx.fillStyle = c + 'AA';
+    ctx.fillText(tierName(sc), xStart + barMaxW * (sc / 100) + 10, y + 52);
   });
 
-  // Branding
+  // Overall at the bottom
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#c8ff00';
-  ctx.font = '400 24px "Space Grotesk", sans-serif';
-  ctx.fillText('COMBINE', W/2 + 40, H - 60);
+  ctx.font = '600 14px "Inter", sans-serif';
   ctx.fillStyle = '#5a5a6e';
-  ctx.font = '400 14px "JetBrains Mono", monospace';
-  ctx.fillText('ATHLETIC PERFORMANCE RATING SYSTEM', W/2 + 40, H - 32);
+  ctx.fillText('OVERALL', W/2, H - 160);
+  ctx.font = '700 64px "Space Grotesk", sans-serif';
+  ctx.fillStyle = scoreColor(r.overall);
+  ctx.fillText(r.overall, W/2, H - 105);
 
-  // Badge side branding
-  ctx.save();
-  ctx.translate(130, H - 100);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  ctx.font = '400 16px "Space Grotesk", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('COMBINE', 0, 0);
-  ctx.restore();
-
-  // Trigger download
-  canvas.toBlob(function(blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `combine-${displayName.toLowerCase().replace(/\s+/g,'-')}-${r.overall}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 'image/png');
+  shareCardBranding(ctx, W, H);
+  return canvas;
 }
+
+// SLIDE 4: Challenge / CTA card
+function drawSlide4(r) {
+  const canvas = document.getElementById('shareCanvas4');
+  const ctx = canvas.getContext('2d');
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+
+  shareCardBg(ctx, W, H, '#a855f7');
+
+  // Find weakest category
+  const filled = Object.entries(r.catScores).filter(([k,v]) => v !== null);
+  let worst = filled[0] || ['—', 0], best = filled[0] || ['—', 0];
+  for (const e of filled) { if (e[1] < worst[1]) worst = e; if (e[1] > best[1]) best = e; }
+  const gap = best[1] - worst[1];
+
+  ctx.textAlign = 'center';
+
+  if (gap >= 8 && filled.length >= 2) {
+    // Weakest link challenge card
+    ctx.font = '600 16px "Inter", sans-serif';
+    ctx.fillStyle = '#5a5a6e';
+    ctx.fillText('THE CHALLENGE', W/2, 140);
+
+    ctx.font = '700 44px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#ef4444';
+    ctx.fillText('WEAKEST LINK:', W/2, 260);
+
+    ctx.font = '700 60px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#f0f0f5';
+    ctx.fillText(worst[0], W/2, 340);
+
+    ctx.font = '700 120px "Space Grotesk", sans-serif';
+    ctx.fillStyle = scoreColor(worst[1]);
+    ctx.fillText(worst[1], W/2, 490);
+
+    ctx.font = '400 22px "Inter", sans-serif';
+    ctx.fillStyle = '#a0a0b0';
+    ctx.fillText(`${gap} points behind your best (${best[0]}: ${best[1]})`, W/2, 560);
+
+    // Motivational CTA
+    ctx.font = '700 32px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#c8ff00';
+    ctx.shadowColor = '#c8ff00';
+    ctx.shadowBlur = 20;
+    ctx.fillText('CAN YOU CLOSE THE GAP?', W/2, 680);
+    ctx.shadowBlur = 0;
+
+  } else {
+    // Balanced — brag card
+    ctx.font = '600 16px "Inter", sans-serif';
+    ctx.fillStyle = '#5a5a6e';
+    ctx.fillText('WELL ROUNDED', W/2, 140);
+
+    ctx.font = '700 52px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#c8ff00';
+    ctx.shadowColor = '#c8ff00';
+    ctx.shadowBlur = 30;
+    ctx.fillText('BALANCED ATHLETE', W/2, 300);
+    ctx.shadowBlur = 0;
+
+    ctx.font = '400 22px "Inter", sans-serif';
+    ctx.fillStyle = '#a0a0b0';
+    ctx.fillText(`Only ${gap} point spread across all categories`, W/2, 370);
+
+    ctx.font = '700 140px "Space Grotesk", sans-serif';
+    ctx.fillStyle = scoreColor(r.overall);
+    ctx.fillText(r.overall, W/2, 560);
+
+    ctx.font = '700 36px "Space Grotesk", sans-serif';
+    ctx.fillStyle = scoreColor(r.overall);
+    ctx.fillText(r.tier, W/2, 620);
+  }
+
+  // Name
+  ctx.font = '400 18px "Inter", sans-serif';
+  ctx.fillStyle = '#5a5a6e';
+  ctx.fillText((r.name || 'ATHLETE').toUpperCase(), W/2, H - 100);
+
+  shareCardBranding(ctx, W, H);
+  return canvas;
+}
+
+// Helper: rounded rectangle
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function generateMultiSlideShareCards() {
+  if (!_lastResult) { alert('Generate ratings first.'); return; }
+  const r = _lastResult;
+
+  // Generate all 4 slides
+  _slideCanvases = [
+    drawSlide1(r),
+    drawSlide2(r),
+    drawSlide3(r),
+    drawSlide4(r),
+  ];
+
+  // Show viewer
+  const viewer = document.getElementById('shareViewer');
+  const slidesContainer = document.getElementById('shareSlides');
+  const dotsContainer = document.getElementById('shareDots');
+
+  slidesContainer.innerHTML = '';
+  dotsContainer.innerHTML = '';
+
+  _slideCanvases.forEach((canvas, i) => {
+    const slideDiv = document.createElement('div');
+    slideDiv.className = 'share-slide' + (i === 0 ? ' active' : '');
+    slideDiv.dataset.index = i;
+
+    // Create visible copy of canvas
+    const displayCanvas = document.createElement('canvas');
+    displayCanvas.width = 1080;
+    displayCanvas.height = 1080;
+    displayCanvas.getContext('2d').drawImage(canvas, 0, 0);
+    displayCanvas.style.maxWidth = '100%';
+    displayCanvas.style.height = 'auto';
+    displayCanvas.style.borderRadius = '12px';
+    slideDiv.appendChild(displayCanvas);
+
+    slidesContainer.appendChild(slideDiv);
+
+    const dot = document.createElement('span');
+    dot.className = 'share-dot' + (i === 0 ? ' active' : '');
+    dot.onclick = () => goToSlide(i);
+    dotsContainer.appendChild(dot);
+  });
+
+  _currentSlide = 0;
+  viewer.style.display = 'block';
+  viewer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function goToSlide(idx) {
+  _currentSlide = idx;
+  document.querySelectorAll('.share-slide').forEach((s, i) => {
+    s.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.share-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === idx);
+  });
+}
+
+function prevSlide() {
+  const total = _slideCanvases.length;
+  goToSlide((_currentSlide - 1 + total) % total);
+}
+
+function nextSlide() {
+  const total = _slideCanvases.length;
+  goToSlide((_currentSlide + 1) % total);
+}
+
+function closeShareViewer() {
+  document.getElementById('shareViewer').style.display = 'none';
+}
+
+function downloadAllSlides() {
+  if (!_lastResult) return;
+  const name = (_lastResult.name || 'athlete').toLowerCase().replace(/\s+/g, '-');
+  const slideNames = ['overall', 'best-category', 'breakdown', 'challenge'];
+
+  _slideCanvases.forEach((canvas, i) => {
+    canvas.toBlob(function(blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `combine-${name}-${slideNames[i]}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  });
+}
+
+// Keep old function name as alias for backwards compat
+function generateShareCard() {
+  generateMultiSlideShareCards();
+}
+
+
+
+

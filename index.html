@@ -13,6 +13,13 @@
 <!-- ARCADE CALLOUT OVERLAY -->
 <div class="arcade-callout" id="arcadeCallout"></div>
 
+<!-- REACTION MOMENT OVERLAY -->
+<div class="reaction-overlay" id="reactionOverlay">
+  <div class="reaction-score-reveal" id="reactionScore"></div>
+  <div class="reaction-tier-reveal" id="reactionTier"></div>
+  <div class="reaction-particles" id="reactionParticles"></div>
+</div>
+
 <header>
   <div>
     <div class="logo">COM<span>B</span>INE</div>
@@ -51,6 +58,15 @@
   <div class="profile-quick-actions">
     <button type="button" class="preset-btn" onclick="applyMostCommonAthletePreset()">⚡ Use Most Common Athlete Defaults</button>
     <div class="preset-hint">Fills a balanced recreational-athlete baseline so you can tweak from there.</div>
+  </div>
+
+  <!-- QUICK START / FULL MODE TOGGLE -->
+  <div class="mode-toggle-wrapper">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="quickStartBtn" onclick="setInputMode('quick')">⚡ Quick Score</button>
+      <button class="mode-btn" id="fullModeBtn" onclick="setInputMode('full')">🔬 Full Combine</button>
+    </div>
+    <div class="mode-hint" id="modeHint">5 key metrics — one per category. Get your rating in 60 seconds.</div>
   </div>
   <div id="bwWarning" class="bw-note" style="display:none; color: var(--amber); margin-top:10px;"></div>
 
@@ -221,10 +237,28 @@
       </div>
     </div>
 
+    <!-- PERCENTILE HIGHLIGHT -->
+    <div id="percentileHighlight" class="percentile-highlight" style="display:none;"></div>
+
     <!-- SAVE & SHARE -->
     <div class="action-btn-row">
       <button class="save-btn" onclick="saveResult()">&#128190; SAVE RESULT</button>
-      <button class="share-btn" onclick="generateShareCard()">&#128248; SHARE CARD</button>
+      <button class="share-btn" onclick="generateMultiSlideShareCards()">&#128248; SHARE CARDS</button>
+    </div>
+
+    <!-- MULTI-SLIDE SHARE VIEWER -->
+    <div id="shareViewer" class="share-viewer" style="display:none;">
+      <div class="share-viewer-header">
+        <span class="share-viewer-title">📱 Share Cards</span>
+        <button class="share-viewer-close" onclick="closeShareViewer()">✕</button>
+      </div>
+      <div class="share-viewer-slides" id="shareSlides"></div>
+      <div class="share-viewer-nav">
+        <button class="share-nav-btn" onclick="prevSlide()">‹</button>
+        <span class="share-nav-dots" id="shareDots"></span>
+        <button class="share-nav-btn" onclick="nextSlide()">›</button>
+      </div>
+      <button class="share-download-all" onclick="downloadAllSlides()">⬇ Download All Cards</button>
     </div>
 
     <!-- ATTRIBUTE BARS -->
@@ -266,12 +300,15 @@
 
     <!-- Compare legend (shown when comparing on radar) -->
     <div class="compare-legend" id="compareLegend" style="display:none;">
-      <span><span class="compare-swatch" style="background:#f5a623;"></span> Current</span>
+      <span><span class="compare-swatch" style="background:#c8ff00;"></span> Current</span>
       <span><span class="compare-swatch" style="background:rgba(77,166,255,0.7);"></span> Previous</span>
     </div>
 
-    <!-- Hidden canvas for share card generation -->
+    <!-- Hidden canvases for share card generation -->
     <canvas id="shareCanvas" width="1080" height="1080"></canvas>
+    <canvas id="shareCanvas2" width="1080" height="1080"></canvas>
+    <canvas id="shareCanvas3" width="1080" height="1080"></canvas>
+    <canvas id="shareCanvas4" width="1080" height="1080"></canvas>
 
   </div><!-- /results -->
 </div><!-- /container -->
@@ -281,3 +318,4 @@
 <script src="app.js"></script>
 </body>
 </html>
+
